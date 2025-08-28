@@ -1,0 +1,14 @@
+# Core AI Framework (minimal)
+langchain>=0.3.0
+langchain-core>=0.3.0
+
+# Data Processing (essential only)
+pandas>=2.0.0
+pyarrow>=12.0.0
+
+# LLM Provider - Google Gemini
+langchain-google-genai>=2.0.0
+google-generativeai>=0.3.0
+
+# Utilities (minimal)
+python-dotenv>=1.0.0

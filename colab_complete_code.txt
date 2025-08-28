@@ -1,0 +1,515 @@
+# Agentic AI DB - Complete Code for Google Colab
+# Copy each section into separate cells in Google Colab
+
+# =============================================
+# CELL 1: Title and Description
+# =============================================
+"""
+# 🎯 Agentic AI DB / Inventory System - Google Colab
+
+A conversational AI platform that lets users ask business questions in plain English and get instant answers from their data.
+
+## 🚀 Current Status: Phase 1 - Simplified Ingestion Agent Complete
+
+We've successfully built a **simplified Ingestion Agent** - the first agent in our streamlined pipeline!
+
+### ✅ What's Working (Simplified)
+- **Ingestion Agent**: Processes CSV files, basic schema inference
+- **CSV Handler**: Simple CSV processing with pandas
+- **State Management**: Minimal state with essential fields only
+- **Basic Schema**: Column names and data types only
+- **DataFrame Storage**: Direct DataFrame reference (no complex storage)
+
+### 🏗️ Simplified Architecture
+```
+User Upload CSV → Ingestion Agent → CSV Handler → Basic Schema → DataFrame in State
+                                    ↓
+                              State Updated with:
+                              - dataset_id
+                              - schema (basic)  
+                              - df (DataFrame)
+                              - source_type
+```
+"""
+
+# =============================================
+# CELL 2: Install Dependencies
+# =============================================
+# Install required packages
+!pip install langchain>=0.3.0 langchain-core>=0.3.0 langchain-google-genai>=2.0.0 google-generativeai>=0.3.0 pandas>=2.0.0 pyarrow>=12.0.0 python-dotenv>=1.0.0
+
+# =============================================
+# CELL 3: Setup Gemini API Key
+# =============================================
+# Set your Gemini API key
+import os
+from google.colab import userdata
+
+# Option 1: Use Colab secrets (recommended)
+try:
+    GOOGLE_API_KEY = userdata.get('GOOGLE_API_KEY')
+    print("✅ API key loaded from Colab secrets")
+except:
+    # Option 2: Direct input (less secure)
+    GOOGLE_API_KEY = input("Enter your Gemini API key: ")
+    print("✅ API key loaded from input")
+
+os.environ['GOOGLE_API_KEY'] = GOOGLE_API_KEY
+
+# =============================================
+# CELL 4: State Management System
+# =============================================
+import uuid
+from datetime import datetime
+from typing import Dict, Any
+
+def create_initial_state() -> Dict[str, Any]:
+    """Create the initial state for a new data analysis session."""
+    return {
+        "session_id": str(uuid.uuid4()),
+        "source_type": None,  # csv, sql, mongo, sheets
+        "dataset_id": None,
+        "df": None,  # Direct DataFrame reference (simpler)
+        "schema": None,  # Simple schema (columns, types)
+        "user_query": None,
+        "plan_dsl": None,
+        "result_df": None,
+        "summary": None,
+        "error": None,
+        "status": "initialized"  # initialized, processing, completed, error
+    }
+
+def update_state(state: Dict[str, Any], **updates) -> Dict[str, Any]:
+    """Update state with new values."""
+    state.update(updates)
+    return state
+
+def get_status_summary(state: Dict[str, Any]) -> str:
+    """Get a human-readable summary of the current state."""
+    if state.get("error"):
+        return f"Error: {state['error']}"
+    
+    if state.get("status") == "completed":
+        return f"Analysis completed for {state.get('source_type', 'unknown')} dataset"
+    
+    if state.get("status") == "processing":
+        return f"Processing {state.get('source_type', 'unknown')} dataset..."
+    
+    if state.get("df") is not None:
+        return f"Ready to analyze {state.get('source_type', 'unknown')} dataset"
+    
+    return "Initializing..."
+
+# Test state management
+print("🧪 Testing State Management")
+state = create_initial_state()
+print(f"Initial state: {get_status_summary(state)}")
+print(f"State keys: {list(state.keys())}")
+
+# =============================================
+# CELL 5: CSV Handler
+# =============================================
+import pandas as pd
+from typing import Dict, Any, Tuple
+from pathlib import Path
+
+class CSVHandler:
+    """Simple CSV file processing and basic schema inference."""
+    
+    def __init__(self, data_dir: str = "data"):
+        self.data_dir = Path(data_dir)
+        self.data_dir.mkdir(exist_ok=True)
+    
+    def process_csv(self, file_path: str, max_rows: int = 10000) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+        """
+        Process a CSV file and return DataFrame + basic schema.
+        
+        Args:
+            file_path: Path to the CSV file
+            max_rows: Maximum rows to read (will be applied after reading)
+            
+        Returns:
+            Tuple of (DataFrame, basic_schema)
+        """
+        try:
+            # Read CSV with pyarrow (without nrows parameter)
+            df = pd.read_csv(
+                file_path,
+                engine='pyarrow',
+                parse_dates=True
+            )
+            
+            # Apply row limit after reading (pyarrow compatible)
+            if len(df) > max_rows:
+                df = df.head(max_rows)
+            
+            # Generate basic schema
+            schema = self._get_basic_schema(df)
+            
+            return df, schema
+            
+        except Exception as e:
+            raise ValueError(f"Failed to process CSV file: {str(e)}")
+    
+    def _get_basic_schema(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """Get basic schema information from DataFrame."""
+        schema = {
+            "columns": list(df.columns),
+            "total_rows": len(df),
+            "total_columns": len(df.columns),
+            "data_types": {}
+        }
+        
+        # Add data types for each column
+        for col in df.columns:
+            schema["data_types"][col] = str(df[col].dtype)
+        
+        return schema
+    
+    def validate_csv_file(self, file_path: str) -> Tuple[bool, str]:
+        """
+        Basic CSV file validation.
+        
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        try:
+            # Check file exists
+            if not Path(file_path).exists():
+                return False, "File does not exist"
+            
+            # Check file extension
+            if not file_path.lower().endswith('.csv'):
+                return False, "File must be a CSV"
+            
+            return True, "File is valid"
+            
+        except Exception as e:
+            return False, f"Validation error: {str(e)}"
+    
+    def generate_dataset_id(self, file_path: str) -> str:
+        """Generate a simple dataset ID."""
+        # Simple ID based on filename
+        filename = Path(file_path).stem
+        return f"csv_{filename}_{len(filename)}"
+
+# Test CSV handler
+print("🧪 Testing CSV Handler")
+handler = CSVHandler()
+print(f"CSV Handler created: {handler}")
+
+# =============================================
+# CELL 6: Ingestion Agent
+# =============================================
+from typing import Dict, Any
+
+class IngestionAgent:
+    """
+    Simple Ingestion Agent for CSV files.
+    
+    This agent:
+    1. Validates CSV files
+    2. Processes CSV to DataFrame
+    3. Generates basic schema
+    4. Updates state with results
+    """
+    
+    def __init__(self, data_dir: str = "data"):
+        self.csv_handler = CSVHandler(data_dir)
+    
+    def process_csv(self, file_path: str, state: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Process a CSV file and update state.
+        
+        Args:
+            file_path: Path to the CSV file
+            state: Current system state
+            
+        Returns:
+            Updated state with CSV processing results
+        """
+        try:
+            # Update state to processing
+            state = update_state(state, status="processing")
+            
+            # Validate CSV file
+            is_valid, error_msg = self.csv_handler.validate_csv_file(file_path)
+            if not is_valid:
+                raise ValueError(f"CSV validation failed: {error_msg}")
+            
+            # Generate dataset ID
+            dataset_id = self.csv_handler.generate_dataset_id(file_path)
+            
+            # Process CSV file
+            df, schema = self.csv_handler.process_csv(file_path)
+            
+            # Update state with results
+            state = update_state(
+                state,
+                source_type="csv",
+                dataset_id=dataset_id,
+                df=df,  # Store DataFrame directly
+                schema=schema,
+                status="completed"
+            )
+            
+            return state
+            
+        except Exception as e:
+            # Update state with error
+            error_msg = f"Ingestion failed: {str(e)}"
+            state = update_state(state, error=error_msg, status="error")
+            return state
+
+# Simple function interface
+def process_csv_file(file_path: str, state: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Simple function to process a CSV file.
+    
+    Args:
+        file_path: Path to the CSV file
+        state: Current system state
+        
+    Returns:
+        Updated state with CSV processing results
+    """
+    agent = IngestionAgent()
+    return agent.process_csv(file_path, state)
+
+# Test Ingestion Agent
+print("🧪 Testing Ingestion Agent")
+agent = IngestionAgent()
+print(f"Ingestion Agent created: {agent}")
+
+# =============================================
+# CELL 7: Gemini Configuration
+# =============================================
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+def get_gemini_model(model_name: str = "gemini-1.5-flash") -> ChatGoogleGenerativeAI:
+    """
+    Get a configured Gemini model instance.
+    
+    Args:
+        model_name: Gemini model to use (default: gemini-1.5-flash)
+        
+    Returns:
+        Configured ChatGoogleGenerativeAI instance
+    """
+    # Get API key from environment
+    api_key = os.getenv("GOOGLE_API_KEY")
+    
+    if not api_key:
+        raise ValueError(
+            "GOOGLE_API_KEY not found in environment variables. "
+            "Please set it in your .env file or environment."
+        )
+    
+    # Create and configure the model
+    model = ChatGoogleGenerativeAI(
+        model=model_name,
+        google_api_key=api_key,
+        temperature=0.1,  # Low temperature for consistent results
+        max_output_tokens=2048,  # Reasonable output limit
+        convert_system_message_to_human=True  # Gemini compatibility
+    )
+    
+    return model
+
+# Test Gemini
+try:
+    print("🧪 Testing Gemini Integration")
+    model = get_gemini_model()
+    print(f"✅ Gemini model loaded: {model.model}")
+    
+    # Test simple response
+    response = model.invoke("Say 'Hello from Gemini!' in exactly 5 words.")
+    print(f"✅ Test response: {response.content}")
+    
+except Exception as e:
+    print(f"❌ Gemini test failed: {str(e)}")
+    print("Make sure you've set your API key correctly!")
+
+# =============================================
+# CELL 8: Create Sample CSV
+# =============================================
+def create_sample_csv():
+    """Create a sample CSV file for testing."""
+    # Sample sales data
+    data = {
+        'order_date': ['2024-01-15', '2024-01-20', '2024-02-01', '2024-02-15', '2024-03-01'],
+        'product': ['Laptop', 'Mouse', 'Keyboard', 'Monitor', 'Headphones'],
+        'category': ['Electronics', 'Accessories', 'Accessories', 'Electronics', 'Accessories'],
+        'quantity': [2, 5, 3, 1, 4],
+        'unit_price': [1200.00, 25.99, 89.99, 299.99, 79.99],
+        'customer_region': ['North', 'South', 'East', 'West', 'North']
+    }
+    
+    df = pd.DataFrame(data)
+    
+    # Save sample CSV
+    csv_path = "sample_sales.csv"
+    df.to_csv(csv_path, index=False)
+    
+    print(f"✅ Created sample CSV file: {csv_path}")
+    print(f"📊 Sample data preview:")
+    print(df.head())
+    print(f"\n📋 Data info:")
+    print(f"   - Rows: {len(df)}")
+    print(f"   - Columns: {len(df.columns)}")
+    
+    return csv_path
+
+# Create sample CSV
+csv_path = create_sample_csv()
+
+# =============================================
+# CELL 9: Test Complete System
+# =============================================
+def test_complete_system():
+    """Test the complete Ingestion Agent system."""
+    print("🚀 Starting Complete System Test")
+    print("=" * 50)
+    
+    # Step 1: Create initial state
+    print("\n1️⃣ Creating initial state...")
+    state = create_initial_state()
+    print(f"   Initial state: {get_status_summary(state)}")
+    
+    # Step 2: Process CSV with Ingestion Agent
+    print("\n2️⃣ Processing CSV with Ingestion Agent...")
+    try:
+        state = process_csv_file(csv_path, state)
+        print(f"   ✅ CSV processed successfully!")
+        print(f"   Status: {get_status_summary(state)}")
+        
+        # Show what was added to state
+        print(f"\n📊 State after ingestion:")
+        print(f"   - Source type: {state.get('source_type')}")
+        print(f"   - Dataset ID: {state.get('dataset_id')}")
+        print(f"   - Status: {state.get('status')}")
+        
+        # Show schema
+        if state.get('schema'):
+            schema = state['schema']
+            print(f"\n🔍 Schema:")
+            print(f"   - Total rows: {schema.get('total_rows')}")
+            print(f"   - Total columns: {schema.get('total_columns')}")
+            print(f"   - Columns: {schema.get('columns')}")
+            print(f"   - Data types: {schema.get('data_types')}")
+        
+        # Show DataFrame info
+        if state.get('df') is not None:
+            df = state['df']
+            print(f"\n📊 DataFrame loaded:")
+            print(f"   - Shape: {df.shape}")
+            print(f"   - First few rows:")
+            print(df.head())
+        
+    except Exception as e:
+        print(f"   ❌ Error processing CSV: {str(e)}")
+    
+    # Step 3: Show final state
+    print("\n3️⃣ Final state summary...")
+    print(f"   Final status: {get_status_summary(state)}")
+    
+    if state.get('error'):
+        print(f"   ❌ Errors encountered: {state['error']}")
+    else:
+        print(f"   ✅ Ingestion completed successfully!")
+        print(f"   🎯 Ready for next agent (Planner)")
+    
+    return state
+
+# Run the complete test
+final_state = test_complete_system()
+
+# =============================================
+# CELL 10: Upload Your Own CSV (Optional)
+# =============================================
+from google.colab import files
+
+def test_with_uploaded_csv():
+    """Test the system with a user-uploaded CSV file."""
+    print("📁 Testing with Uploaded CSV")
+    print("=" * 40)
+    
+    # Upload CSV file
+    print("Please upload your CSV file...")
+    uploaded = files.upload()
+    
+    if not uploaded:
+        print("❌ No file uploaded")
+        return
+    
+    # Get the first uploaded file
+    filename = list(uploaded.keys())[0]
+    print(f"✅ File uploaded: {filename}")
+    
+    # Create new state and process
+    state = create_initial_state()
+    print(f"\n🔄 Processing uploaded file...")
+    
+    try:
+        state = process_csv_file(filename, state)
+        print(f"✅ Processing result: {get_status_summary(state)}")
+        
+        if state.get('schema'):
+            schema = state['schema']
+            print(f"\n📊 Your CSV Schema:")
+            print(f"   - Rows: {schema.get('total_rows')}")
+            print(f"   - Columns: {schema.get('total_columns')}")
+            print(f"   - Column names: {schema.get('columns')}")
+        
+        if state.get('df') is not None:
+            df = state['df']
+            print(f"\n📊 Your Data Preview:")
+            print(df.head())
+        
+    except Exception as e:
+        print(f"❌ Error: {str(e)}")
+
+# Uncomment to test with your own CSV
+# test_with_uploaded_csv()
+
+# =============================================
+# CELL 11: Summary and Next Steps
+# =============================================
+"""
+## 🎯 Summary: What We've Built
+
+### ✅ Completed Components
+- **State Management**: Simple dict-based state system
+- **CSV Handler**: Basic CSV processing with pandas
+- **Ingestion Agent**: Complete CSV processing pipeline
+- **Gemini Integration**: AI model setup and configuration
+- **Testing System**: Complete testing with sample and uploaded data
+
+### 🏗️ Architecture
+```
+User Upload CSV → Ingestion Agent → CSV Handler → Basic Schema → DataFrame in State
+                                    ↓
+                              State Updated with:
+                              - dataset_id
+                              - schema (basic)  
+                              - df (DataFrame)
+                              - source_type
+```
+
+### 🎯 Next Steps: Planner Agent
+The next agent will:
+1. Take user questions in English
+2. Use Gemini to convert them to query plans
+3. Generate safe JSON DSL for data operations
+4. Do basic validation before passing to Executor
+
+### 🎓 What We've Learned
+- **AI Agent Basics**: How agents work together
+- **Data Processing**: Safe pandas operations
+- **State Management**: Simple but effective approach
+- **Gemini Integration**: Easy LLM setup
+- **Minimal Complexity**: Focus on core functionality
+
+The foundation is solid - ready to build the next agent! 🚀
+"""
+
