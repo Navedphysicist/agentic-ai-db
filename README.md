@@ -1,181 +1,161 @@
-# Agentic AI DB / Inventory System - Simplified
+# Agentic AI DB - Step 1: Multi-Source Ingestion Agent
 
-A conversational AI platform that lets users ask business questions in plain English and get instant answers from their data (CSV, SQL, MongoDB, Excel, Google Sheets).
+A powerful, beginner-friendly project to learn AI agents by building them step-by-step.
 
-## 🚀 Current Status: Phase 1 - Simplified Ingestion Agent Complete
+**Current Focus: Multi-Source Ingestion Agent**
 
-We've successfully built a **simplified Ingestion Agent** - the first agent in our streamlined pipeline! 
+## What the Ingestion Agent Does
 
-### ✅ What's Working (Simplified)
+The Ingestion Agent is smart enough to handle multiple data sources with a single, consistent interface:
 
-- **Ingestion Agent**: Processes CSV files, basic schema inference
-- **CSV Handler**: Simple CSV processing with pandas
-- **State Management**: Minimal state with essential fields only
-- **Basic Schema**: Column names and data types only
-- **DataFrame Storage**: Direct DataFrame reference (no complex storage)
+### ✅ Supported Data Sources
+- **CSV Files**: `.csv` files with pandas processing
+- **SQLite Databases**: `.db/.sqlite` files with SQL queries
+- **SQL Databases**: PostgreSQL, MySQL with connection strings
+- **MongoDB**: Document collections with query support
 
-### 🏗️ Simplified Architecture
+### 🔍 Key Features
+- **Auto-Detection**: Automatically detects data source types
+- **Consistent Interface**: Same functions work for all sources
+- **Specialized Handlers**: Optimized processing for each data type
+- **Unified Output**: All sources produce the same state format
+- **Error Handling**: Graceful failures for all source types
+- **Validation**: Each source validates before processing
 
-```
-User Upload CSV → Ingestion Agent → CSV Handler → Basic Schema → DataFrame in State
-                                    ↓
-                              State Updated with:
-                              - dataset_id
-                              - schema (basic)  
-                              - df (DataFrame)
-                              - source_type
-```
+## Quick Start
 
-## 🎯 Simplified Approach: 4 Core Agents Only
-
-We've streamlined the system to focus on **essential functionality only**:
-
-1. **✅ Ingestion Agent** - CSV processing (working)
-2. **🎯 Planner Agent** - Convert English to query plans (next)
-3. **📋 Executor Agent** - Run approved plans
-4. **📝 Summarizer Agent** - Generate explanations
-
-**Removed for simplicity:**
-- ~~Query Router~~ - Direct routing in Planner
-- ~~Plan Guard~~ - Basic validation in Planner
-- ~~Visualization Agent~~ - Tables only
-- ~~Responder~~ - Frontend handles this
-- ~~Complex state management~~ - Essential fields only
-
-## 🎯 How to Use the Simplified Ingestion Agent
-
-### 1. Basic Usage
-
-```python
-from shared.state import create_initial_state
-from agents.ingestion import process_csv_file
-
-# Create initial state
-state = create_initial_state()
-
-# Process a CSV file
-state = process_csv_file("path/to/your/file.csv", state)
-
-# Check results
-print(f"Dataset ID: {state['dataset_id']}")
-print(f"Schema: {state['schema']}")
-print(f"DataFrame shape: {state['df'].shape}")
-```
-
-### 2. Run the Demo
-
+1. Create and activate virtual environment:
 ```bash
-cd agentic-ai-db
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+2. Install requirements:
+```bash
+pip install -r requirements.txt
+```
+
+3. Basic CSV demo:
+```bash
 python demo_ingestion.py
 ```
 
-This will:
-- Create a sample CSV file
-- Process it with the Ingestion Agent
-- Show basic schema results
-- Display the DataFrame
-
-## 📊 What the Simplified Ingestion Agent Does
-
-### For CSV Files:
-1. **Validates** file (exists, CSV extension)
-2. **Processes** with pandas + pyarrow
-3. **Generates Basic Schema**:
-   - Column names
-   - Data types
-   - Row/column counts
-4. **Stores DataFrame** directly in state
-5. **Updates State** with essential information
-
-### Schema Output (Simplified):
-```json
-{
-  "columns": ["order_date", "product", "category", "quantity", "unit_price"],
-  "total_rows": 5,
-  "total_columns": 5,
-  "data_types": {
-    "order_date": "object",
-    "product": "object",
-    "quantity": "int64",
-    "unit_price": "float64"
-  }
-}
+4. Multi-source demo:
+```bash
+python demo_multi_source_ingestion.py
 ```
 
-## 🔧 Technical Details (Simplified)
+5. Create sample databases:
+```bash
+python create_sample_databases.py
+```
 
-### Dependencies (Minimal)
-- **pandas**: Data processing
-- **pyarrow**: Fast CSV reading
-- **langchain**: Basic AI framework
+6. Run comprehensive tests:
+```bash
+python test_ingestion_agent.py
+```
 
-### File Structure (Streamlined)
+## Project Structure
+
 ```
 agentic-ai-db/
 ├── agents/
-│   └── ingestion.py          # Simple Ingestion Agent
+│   └── ingestion.py           # Multi-source Ingestion Agent
 ├── data/
-│   └── csv_handler.py        # Basic CSV processing
+│   ├── csv_handler.py         # CSV processing
+│   ├── sql_handler.py         # SQL/SQLite processing  
+│   ├── mongo_handler.py       # MongoDB processing
+│   └── sample_*.csv/db        # Sample data files
 ├── shared/
-│   └── state.py              # Minimal state management
-├── demo_ingestion.py         # Simple demo
-└── requirements.txt           # Minimal dependencies
+│   └── state.py               # State management
+├── config/
+│   └── gemini_config.py       # AI model configuration
+├── demo_ingestion.py          # Basic CSV demo
+├── demo_multi_source_ingestion.py  # Multi-source demo
+└── create_sample_databases.py # Create sample data
 ```
 
-### State Management (Essential Only)
-The state is a simple dictionary with only essential fields:
+## What Students Learn
+
+### 🎓 Core Concepts
+1. **Agent Pattern**: One interface, multiple implementations
+2. **Handler Pattern**: Specialized classes for each data type
+3. **State Management**: Consistent state across all sources
+4. **Auto-Detection**: Smart routing based on data source type
+5. **Error Handling**: Graceful failure management
+6. **Data Validation**: Safe processing practices
+
+### 🗃️ Real-World Skills
+- Working with multiple data formats
+- Database connectivity and querying
+- Data pipeline design
+- Error handling strategies
+- Clean architecture patterns
+
+## Sample Usage
+
+### CSV Processing
 ```python
-{
-    "session_id": "uuid",
-    "source_type": "csv",
-    "dataset_id": "csv_sample_sales_15",
-    "df": <DataFrame>,  # Direct reference
-    "schema": {...},     # Basic schema
-    "status": "completed"
-}
+from agents.ingestion import process_csv_file
+from shared.state import create_initial_state
+
+state = create_initial_state()
+state = process_csv_file("data/sample_sales.csv", state)
 ```
 
-## 🚀 Next Steps
+### SQLite Processing
+```python
+from agents.ingestion import process_sqlite_file
 
-### Phase 1: Core Agents (Current)
-- [x] **Ingestion Agent**: CSV processing working
-- [ ] **Planner Agent**: Convert English to query plans
-- [ ] **Executor Agent**: Execute approved plans
-- [ ] **Summarizer Agent**: Generate explanations
+state = create_initial_state()
+state = process_sqlite_file("data/sample_inventory.db", "SELECT * FROM products", state)
+```
 
-### Phase 2: Simple Backend
-- [ ] Basic FastAPI endpoints
-- [ ] File upload handling
-- [ ] Agent coordination
+### Auto-Detection
+```python
+from agents.ingestion import process_data_source
 
-### Phase 3: Simple Frontend
-- [ ] Basic HTML interface
-- [ ] File upload + query input
-- [ ] Results display
+# Auto-detects CSV
+state = process_data_source("data/sample_sales.csv", state)
 
-## 🎓 Educational Value (Simplified)
+# Auto-detects SQLite
+state = process_data_source("data/sample_inventory.db", state, query="SELECT * FROM products")
+```
 
-This simplified project demonstrates:
-- **AI Agent Basics**: How agents work together
-- **Natural Language Processing**: Converting questions to data operations
-- **Data Processing**: Safe pandas operations
-- **Simple Architecture**: Clean, understandable code
-- **Minimal Complexity**: Focus on core functionality
+## Sample Output
 
-## 🔒 Safety Features (Simplified)
+```
+🚀 Multi-Source Ingestion Agent Demo
 
-- **Basic Validation**: File existence, CSV format
-- **Safe Operations**: Read-only data processing
-- **Simple Limits**: Basic row limits only
+📊 CSV DATA SOURCE
+✅ CSV processed successfully!
+📊 Dataset ID: csv_sample_sales_a1b2c3d4
+📊 Loaded 5 rows and 6 columns
 
-## 📝 Why Simplified?
+🗄️ SQLITE DATA SOURCE  
+✅ SQLite database processed successfully!
+📊 Dataset ID: sql_sample_inventory_x7y8z9w0
+📊 Loaded 5 rows and 6 columns
 
-- **Student-Friendly**: Easy to understand and extend
-- **Focused Learning**: Core AI concepts without complexity
-- **Quick Development**: Build working system faster
-- **Maintainable**: Less code, fewer bugs
-- **Extensible**: Easy to add features later
+🔄 UNIVERSAL DATA PROCESSOR
+Auto-detects and processes different data sources!
+```
 
----
+## Learning Philosophy
 
-**Ready for the next agent?** The simplified Ingestion Agent has prepared the data. Now we need the **Planner Agent** to convert English questions into query plans!
+**One agent at a time, master each step before moving forward!**
+
+- Start with understanding how the agent works with CSV files
+- Learn how the same agent handles databases
+- Understand the architecture patterns
+- Master multi-source concepts
+- Then move to the next agent
+
+## Next Steps
+
+After mastering the Multi-Source Ingestion Agent, we'll add:
+- **Planner Agent**: Converts questions to execution plans
+- **Executor Agent**: Executes data operations  
+- **Summarizer Agent**: Creates human-readable summaries
+
+**Ready when you are!** This agent foundation prepares you for the complete 4-agent system.

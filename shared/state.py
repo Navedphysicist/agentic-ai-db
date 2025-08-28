@@ -3,46 +3,37 @@ Simplified state management for the Agentic AI DB system.
 Only essential fields, simple dict-based state.
 """
 
-from typing import Dict, Any
-from datetime import datetime
-import uuid
 
-
-def create_initial_state() -> Dict[str, Any]:
-    """Create the initial state for a new data analysis session."""
+def create_initial_state():
     return {
-        "session_id": str(uuid.uuid4()),
-        "source_type": None,  # csv, sql, mongo, sheets
+        "status": "initialized",
+        "source_type": None,
         "dataset_id": None,
-        "df": None,  # Direct DataFrame reference (simpler)
-        "schema": None,  # Simple schema (columns, types)
-        "user_query": None,
-        "plan_dsl": None,
-        "result_df": None,
-        "summary": None,
-        "error": None,
-        "status": "initialized"  # initialized, processing, completed, error
+        "df": None,
+        "schema": None,
+        "error": None
     }
 
 
-def update_state(state: Dict[str, Any], **updates) -> Dict[str, Any]:
+def update_state(state, **updates):
     """Update state with new values."""
     state.update(updates)
     return state
 
 
-def get_status_summary(state: Dict[str, Any]) -> str:
-    """Get a human-readable summary of the current state."""
-    if state.get("error"):
+def get_status_summary(state):
+    if state.get('error'):
         return f"Error: {state['error']}"
 
-    if state.get("status") == "completed":
-        return f"Analysis completed for {state.get('source_type', 'unknown')} dataset"
+    status_parts = []
 
-    if state.get("status") == "processing":
-        return f"Processing {state.get('source_type', 'unknown')} dataset..."
+    if state.get('status'):
+        status_parts.append(f"Status: {state['status']}")
+    if state.get('source_type'):
+        status_parts.append(f"Source: {state['source_type']}")
+    if state.get('dataset_id'):
+        status_parts.append(f"Dataset: {state['dataset_id']}")
+    if state.get('df') is not None:
+        status_parts.append(f"Data: {state['df'].shape[0]} rows")
 
-    if state.get("df") is not None:
-        return f"Ready to analyze {state.get('source_type', 'unknown')} dataset"
-
-    return "Initializing..."
+    return " | ".join(status_parts) if status_parts else "No data loaded"

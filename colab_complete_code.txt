@@ -1,515 +1,494 @@
-# Agentic AI DB - Complete Code for Google Colab
+# Agentic AI DB - Automatic Multi-Source Ingestion (Google Colab)
 # Copy each section into separate cells in Google Colab
 
 # =============================================
 # CELL 1: Title and Description
 # =============================================
 """
-# 🎯 Agentic AI DB / Inventory System - Google Colab
+# Agentic AI DB - Automatic Multi-Source Ingestion Agent
 
-A conversational AI platform that lets users ask business questions in plain English and get instant answers from their data.
+The RIGHT way to build data ingestion: Upload files → Agent discovers everything → Ask questions later!
 
-## 🚀 Current Status: Phase 1 - Simplified Ingestion Agent Complete
+## Correct Workflow
+1. 📁 User uploads ANY data file (CSV, SQLite, JSON, MongoDB dump)
+2. 🤖 Agent auto-detects file type and discovers ALL tables/collections
+3. 📊 Agent automatically reads ALL available data
+4. 💬 User can then ask natural language questions
+5. 🧠 Other agents (Planner, Executor, Summarizer) handle the questions
 
-We've successfully built a **simplified Ingestion Agent** - the first agent in our streamlined pipeline!
+## What the Ingestion Agent Does
+✅ Auto-detects file types (CSV, SQLite, JSON, etc.)
+✅ Discovers all tables in databases automatically
+✅ Discovers all collections in JSON/MongoDB files
+✅ Reads ALL data without requiring user queries
+✅ Creates unified DataFrames ready for analysis
+✅ Generates unique dataset IDs for tracking
 
-### ✅ What's Working (Simplified)
-- **Ingestion Agent**: Processes CSV files, basic schema inference
-- **CSV Handler**: Simple CSV processing with pandas
-- **State Management**: Minimal state with essential fields only
-- **Basic Schema**: Column names and data types only
-- **DataFrame Storage**: Direct DataFrame reference (no complex storage)
+## Why No User Queries?
+- Users shouldn't write SQL - that's technical!
+- Natural language questions come later with other agents
+- Ingestion = get ALL the data first, ask questions later
+- This matches real-world data platform behavior
 
-### 🏗️ Simplified Architecture
-```
-User Upload CSV → Ingestion Agent → CSV Handler → Basic Schema → DataFrame in State
-                                    ↓
-                              State Updated with:
-                              - dataset_id
-                              - schema (basic)  
-                              - df (DataFrame)
-                              - source_type
-```
+## Learning Goals
+1. Understand automatic data discovery
+2. Learn the upload-only user experience
+3. See how agents prepare data for natural language queries
+4. Master the complete data ingestion workflow
 """
 
 # =============================================
 # CELL 2: Install Dependencies
 # =============================================
-# Install required packages
-!pip install langchain>=0.3.0 langchain-core>=0.3.0 langchain-google-genai>=2.0.0 google-generativeai>=0.3.0 pandas>=2.0.0 pyarrow>=12.0.0 python-dotenv>=1.0.0
+!pip install pandas pyarrow sqlalchemy
 
 # =============================================
-# CELL 3: Setup Gemini API Key
+# CELL 3: Import Libraries
 # =============================================
-# Set your Gemini API key
-import os
-from google.colab import userdata
-
-# Option 1: Use Colab secrets (recommended)
-try:
-    GOOGLE_API_KEY = userdata.get('GOOGLE_API_KEY')
-    print("✅ API key loaded from Colab secrets")
-except:
-    # Option 2: Direct input (less secure)
-    GOOGLE_API_KEY = input("Enter your Gemini API key: ")
-    print("✅ API key loaded from input")
-
-os.environ['GOOGLE_API_KEY'] = GOOGLE_API_KEY
-
-# =============================================
-# CELL 4: State Management System
-# =============================================
+import pandas as pd
+import sqlite3
 import uuid
-from datetime import datetime
-from typing import Dict, Any
+from pathlib import Path
+import os
+import json
 
-def create_initial_state() -> Dict[str, Any]:
-    """Create the initial state for a new data analysis session."""
+# =============================================
+# CELL 4: Create Sample Data Files
+# =============================================
+print("Creating sample data files for automatic ingestion...")
+
+# 1. CSV Data (simple upload)
+csv_data = {
+    'order_date': ['2024-01-15', '2024-01-20', '2024-02-01', '2024-02-15', '2024-03-01'],
+    'product': ['Laptop', 'Mouse', 'Keyboard', 'Monitor', 'Headphones'],
+    'category': ['Electronics', 'Accessories', 'Accessories', 'Electronics', 'Accessories'],
+    'quantity': [2, 5, 3, 1, 4],
+    'unit_price': [1200.00, 25.99, 89.99, 299.99, 79.99],
+    'customer_region': ['North', 'South', 'East', 'West', 'North']
+}
+
+df_csv = pd.DataFrame(csv_data)
+df_csv.to_csv('sample_sales.csv', index=False)
+print("✅ CSV file created - user can just upload this!")
+
+# 2. SQLite Database (multiple tables - agent will discover all)
+products_data = {
+    'product_id': [1, 2, 3, 4, 5],
+    'product_name': ['Laptop Pro', 'Wireless Mouse', 'USB Keyboard', '4K Monitor', 'Bluetooth Headphones'],
+    'category': ['Electronics', 'Accessories', 'Accessories', 'Electronics', 'Accessories'],
+    'price': [1299.99, 29.99, 79.99, 399.99, 159.99],
+    'stock_quantity': [15, 50, 30, 8, 25]
+}
+
+sales_data = {
+    'sale_id': [1, 2, 3, 4, 5],
+    'product_id': [1, 2, 1, 3, 4],
+    'quantity_sold': [2, 5, 1, 3, 1],
+    'sale_date': ['2024-01-15', '2024-01-16', '2024-01-17', '2024-01-18', '2024-01-19'],
+    'total_amount': [2599.98, 149.95, 1299.99, 239.97, 399.99]
+}
+
+# Create SQLite with multiple tables
+conn = sqlite3.connect('sample_inventory.db')
+products_df = pd.DataFrame(products_data)
+sales_df = pd.DataFrame(sales_data)
+products_df.to_sql('products', conn, index=False, if_exists='replace')
+sales_df.to_sql('sales', conn, index=False, if_exists='replace')
+conn.close()
+print("✅ SQLite database created with MULTIPLE tables - agent will find them all!")
+
+# 3. JSON data (MongoDB-style documents)
+customers_data = [
+    {"customer_id": 1, "name": "John Smith", "region": "North", "total_orders": 5, "lifetime_value": 2500.99},
+    {"customer_id": 2, "name": "Sarah Johnson", "region": "South", "total_orders": 3, "lifetime_value": 1850.50},
+    {"customer_id": 3, "name": "Mike Davis", "region": "East", "total_orders": 7, "lifetime_value": 3200.75},
+    {"customer_id": 4, "name": "Emily Wilson", "region": "West", "total_orders": 2, "lifetime_value": 999.99}
+]
+
+with open('sample_customers.json', 'w') as f:
+    json.dump(customers_data, f, indent=2)
+print("✅ JSON file created - agent will read all documents automatically!")
+
+print(f"\n📊 Sample files summary:")
+print(f"CSV: {len(df_csv)} rows")
+print(f"SQLite: {len(products_df)} products + {len(sales_df)} sales")
+print(f"JSON: {len(customers_data)} customers")
+print("\n💡 User just uploads these files - agent does the rest!")
+
+# =============================================
+# CELL 5: State Management
+# =============================================
+def create_initial_state():
     return {
-        "session_id": str(uuid.uuid4()),
-        "source_type": None,  # csv, sql, mongo, sheets
+        "status": "initialized",
+        "source_type": None,
         "dataset_id": None,
-        "df": None,  # Direct DataFrame reference (simpler)
-        "schema": None,  # Simple schema (columns, types)
-        "user_query": None,
-        "plan_dsl": None,
-        "result_df": None,
-        "summary": None,
-        "error": None,
-        "status": "initialized"  # initialized, processing, completed, error
+        "df": None,
+        "schema": None,
+        "error": None
     }
 
-def update_state(state: Dict[str, Any], **updates) -> Dict[str, Any]:
-    """Update state with new values."""
+def update_state(state, **updates):
     state.update(updates)
     return state
 
-def get_status_summary(state: Dict[str, Any]) -> str:
-    """Get a human-readable summary of the current state."""
-    if state.get("error"):
+def get_status_summary(state):
+    if state.get('error'):
         return f"Error: {state['error']}"
-    
-    if state.get("status") == "completed":
-        return f"Analysis completed for {state.get('source_type', 'unknown')} dataset"
-    
-    if state.get("status") == "processing":
-        return f"Processing {state.get('source_type', 'unknown')} dataset..."
-    
-    if state.get("df") is not None:
-        return f"Ready to analyze {state.get('source_type', 'unknown')} dataset"
-    
-    return "Initializing..."
 
-# Test state management
-print("🧪 Testing State Management")
-state = create_initial_state()
-print(f"Initial state: {get_status_summary(state)}")
-print(f"State keys: {list(state.keys())}")
+    status_parts = []
+    
+    if state.get('status'):
+        status_parts.append(f"Status: {state['status']}")
+    if state.get('source_type'):
+        status_parts.append(f"Source: {state['source_type']}")
+    if state.get('dataset_id'):
+        status_parts.append(f"Dataset: {state['dataset_id']}")
+    if state.get('df') is not None:
+        status_parts.append(f"Data: {state['df'].shape[0]} rows")
+
+    return " | ".join(status_parts) if status_parts else "No data loaded"
+
+print("✅ State management ready!")
 
 # =============================================
-# CELL 5: CSV Handler
+# CELL 6: CSV Handler (Simple Upload)
 # =============================================
-import pandas as pd
-from typing import Dict, Any, Tuple
-from pathlib import Path
-
 class CSVHandler:
-    """Simple CSV file processing and basic schema inference."""
-    
-    def __init__(self, data_dir: str = "data"):
-        self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(exist_ok=True)
-    
-    def process_csv(self, file_path: str, max_rows: int = 10000) -> Tuple[pd.DataFrame, Dict[str, Any]]:
-        """
-        Process a CSV file and return DataFrame + basic schema.
-        
-        Args:
-            file_path: Path to the CSV file
-            max_rows: Maximum rows to read (will be applied after reading)
-            
-        Returns:
-            Tuple of (DataFrame, basic_schema)
-        """
+
+    def process_csv(self, file_path, max_rows=10000):
         try:
-            # Read CSV with pyarrow (without nrows parameter)
-            df = pd.read_csv(
-                file_path,
-                engine='pyarrow',
-                parse_dates=True
-            )
-            
-            # Apply row limit after reading (pyarrow compatible)
+            df = pd.read_csv(file_path)
+
             if len(df) > max_rows:
+                print(f"Large dataset detected. Using first {max_rows} rows.")
                 df = df.head(max_rows)
-            
-            # Generate basic schema
+
             schema = self._get_basic_schema(df)
-            
             return df, schema
             
         except Exception as e:
             raise ValueError(f"Failed to process CSV file: {str(e)}")
-    
-    def _get_basic_schema(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Get basic schema information from DataFrame."""
+
+    def _get_basic_schema(self, df):
         schema = {
             "columns": list(df.columns),
             "total_rows": len(df),
             "total_columns": len(df.columns),
-            "data_types": {}
+            "data_types": {col: str(df[col].dtype) for col in df.columns}
         }
-        
-        # Add data types for each column
-        for col in df.columns:
-            schema["data_types"][col] = str(df[col].dtype)
-        
         return schema
-    
-    def validate_csv_file(self, file_path: str) -> Tuple[bool, str]:
-        """
-        Basic CSV file validation.
-        
-        Returns:
-            Tuple of (is_valid, error_message)
-        """
+
+    def validate_csv_file(self, file_path):
         try:
-            # Check file exists
             if not Path(file_path).exists():
                 return False, "File does not exist"
-            
-            # Check file extension
             if not file_path.lower().endswith('.csv'):
                 return False, "File must be a CSV"
-            
+            if Path(file_path).stat().st_size == 0:
+                return False, "File is empty"
             return True, "File is valid"
-            
         except Exception as e:
             return False, f"Validation error: {str(e)}"
-    
-    def generate_dataset_id(self, file_path: str) -> str:
-        """Generate a simple dataset ID."""
-        # Simple ID based on filename
+
+    def generate_dataset_id(self, file_path):
         filename = Path(file_path).stem
-        return f"csv_{filename}_{len(filename)}"
+        short_uuid = str(uuid.uuid4())[:8]
+        return f"csv_{filename}_{short_uuid}"
 
-# Test CSV handler
-print("🧪 Testing CSV Handler")
-handler = CSVHandler()
-print(f"CSV Handler created: {handler}")
+print("✅ CSV Handler ready - just upload and go!")
 
 # =============================================
-# CELL 6: Ingestion Agent
+# CELL 7: SQLite Handler (Auto-Discovery)
 # =============================================
-from typing import Dict, Any
+class SQLiteHandler:
 
-class IngestionAgent:
-    """
-    Simple Ingestion Agent for CSV files.
-    
-    This agent:
-    1. Validates CSV files
-    2. Processes CSV to DataFrame
-    3. Generates basic schema
-    4. Updates state with results
-    """
-    
-    def __init__(self, data_dir: str = "data"):
-        self.csv_handler = CSVHandler(data_dir)
-    
-    def process_csv(self, file_path: str, state: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Process a CSV file and update state.
-        
-        Args:
-            file_path: Path to the CSV file
-            state: Current system state
-            
-        Returns:
-            Updated state with CSV processing results
-        """
+    def process_sqlite_file(self, db_path, max_rows=10000):
+        """Automatically discovers and reads ALL tables in SQLite database"""
         try:
-            # Update state to processing
-            state = update_state(state, status="processing")
+            conn = sqlite3.connect(db_path)
             
-            # Validate CSV file
-            is_valid, error_msg = self.csv_handler.validate_csv_file(file_path)
-            if not is_valid:
-                raise ValueError(f"CSV validation failed: {error_msg}")
+            # Discover all tables automatically
+            tables_query = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            tables_df = pd.read_sql_query(tables_query, conn)
             
-            # Generate dataset ID
-            dataset_id = self.csv_handler.generate_dataset_id(file_path)
+            if tables_df.empty:
+                raise ValueError("No tables found in SQLite database")
             
-            # Process CSV file
-            df, schema = self.csv_handler.process_csv(file_path)
+            table_names = tables_df['name'].tolist()
+            print(f"🔍 Auto-discovered {len(table_names)} tables: {table_names}")
             
-            # Update state with results
-            state = update_state(
-                state,
-                source_type="csv",
-                dataset_id=dataset_id,
-                df=df,  # Store DataFrame directly
-                schema=schema,
-                status="completed"
-            )
+            all_data = {}
             
-            return state
+            # Read ALL tables automatically
+            for table_name in table_names:
+                query = f"SELECT * FROM {table_name}"
+                df = pd.read_sql_query(query, conn)
+                
+                if len(df) > max_rows:
+                    print(f"Large table '{table_name}' detected. Using first {max_rows} rows.")
+                    df = df.head(max_rows)
+                
+                df = df.add_prefix(f"{table_name}_")
+                all_data[table_name] = df
+                print(f"   📊 {table_name}: {len(df)} rows, {len(df.columns)} columns")
+            
+            # Combine all tables
+            combined_df = self._combine_tables(all_data)
+            schema = self._get_basic_schema(combined_df, table_names)
+            conn.close()
+            
+            print(f"✅ Combined all tables: {len(combined_df)} rows, {len(combined_df.columns)} columns")
+            return combined_df, schema
             
         except Exception as e:
-            # Update state with error
-            error_msg = f"Ingestion failed: {str(e)}"
-            state = update_state(state, error=error_msg, status="error")
-            return state
+            raise ValueError(f"Failed to process SQLite file: {str(e)}")
 
-# Simple function interface
-def process_csv_file(file_path: str, state: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Simple function to process a CSV file.
-    
-    Args:
-        file_path: Path to the CSV file
-        state: Current system state
+    def _combine_tables(self, all_data):
+        # Create summary + include data from largest table
+        summary_data = []
+        for table_name, df in all_data.items():
+            summary_row = {
+                'table_name': table_name,
+                'row_count': len(df),
+                'columns': ', '.join(df.columns[:3])
+            }
+            summary_data.append(summary_row)
         
-    Returns:
-        Updated state with CSV processing results
-    """
-    agent = IngestionAgent()
-    return agent.process_csv(file_path, state)
+        summary_df = pd.DataFrame(summary_data)
+        largest_table = max(all_data.items(), key=lambda x: len(x[1]))
+        largest_df = largest_table[1].head(50)  # Include actual data
+        
+        # Combine summary with actual data
+        combined_df = pd.concat([summary_df.add_prefix('meta_'), largest_df], axis=1, sort=False)
+        return combined_df
 
-# Test Ingestion Agent
-print("🧪 Testing Ingestion Agent")
-agent = IngestionAgent()
-print(f"Ingestion Agent created: {agent}")
+    def _get_basic_schema(self, df, table_names):
+        schema = {
+            "columns": list(df.columns),
+            "total_rows": len(df),
+            "total_columns": len(df.columns),
+            "data_types": {col: str(df[col].dtype) for col in df.columns},
+            "tables_discovered": table_names,
+            "source_info": f"Auto-discovered and combined {len(table_names)} tables"
+        }
+        return schema
+
+    def generate_dataset_id(self, db_path):
+        filename = Path(db_path).stem
+        short_uuid = str(uuid.uuid4())[:8]
+        return f"sqlite_{filename}_{short_uuid}"
+
+print("✅ SQLite Handler ready - auto-discovers all tables!")
 
 # =============================================
-# CELL 7: Gemini Configuration
+# CELL 8: JSON Handler (Document Discovery)
 # =============================================
-from langchain_google_genai import ChatGoogleGenerativeAI
+class JSONHandler:
 
-def get_gemini_model(model_name: str = "gemini-1.5-flash") -> ChatGoogleGenerativeAI:
-    """
-    Get a configured Gemini model instance.
+    def process_json_file(self, file_path, max_rows=10000):
+        """Automatically reads all documents from JSON file"""
+        try:
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+            
+            # Ensure data is a list of documents
+            if isinstance(data, dict):
+                data = [data]
+            elif not isinstance(data, list):
+                raise ValueError("JSON file must contain an object or array")
+            
+            if len(data) > max_rows:
+                print(f"Large dataset detected. Using first {max_rows} documents.")
+                data = data[:max_rows]
+            
+            # Convert to DataFrame
+            df = pd.DataFrame(data)
+            schema = self._get_basic_schema(df)
+            
+            print(f"✅ JSON processed: {len(df)} documents, {len(df.columns)} fields")
+            return df, schema
+            
+        except Exception as e:
+            raise ValueError(f"Failed to process JSON file: {str(e)}")
+
+    def _get_basic_schema(self, df):
+        schema = {
+            "columns": list(df.columns),
+            "total_rows": len(df),
+            "total_columns": len(df.columns),
+            "data_types": {col: str(df[col].dtype) for col in df.columns},
+            "source_info": "JSON documents automatically processed"
+        }
+        return schema
+
+    def generate_dataset_id(self, file_path):
+        filename = Path(file_path).stem
+        short_uuid = str(uuid.uuid4())[:8]
+        return f"json_{filename}_{short_uuid}"
+
+print("✅ JSON Handler ready - reads all documents automatically!")
+
+# =============================================
+# CELL 9: Automatic Ingestion Agent
+# =============================================
+def detect_data_source(file_path):
+    """Auto-detect file type"""
+    if file_path.lower().endswith('.csv'):
+        return "csv"
+    elif file_path.lower().endswith(('.db', '.sqlite', '.sqlite3')):
+        return "sqlite"
+    elif file_path.lower().endswith(('.json', '.jsonl')):
+        return "json"
+    return "unknown"
+
+def ingest_data_file(file_path, state):
+    """Universal file ingestion - just upload and go!"""
+    print(f"🔍 Auto-detecting file type: {file_path}")
     
-    Args:
-        model_name: Gemini model to use (default: gemini-1.5-flash)
+    source_type = detect_data_source(file_path)
+    print(f"📋 Detected: {source_type}")
+    
+    state = update_state(state, status="processing")
+    
+    try:
+        if source_type == "csv":
+            handler = CSVHandler()
+            df, schema = handler.process_csv(file_path)
+            dataset_id = handler.generate_dataset_id(file_path)
+            
+        elif source_type == "sqlite":
+            handler = SQLiteHandler()
+            df, schema = handler.process_sqlite_file(file_path)
+            dataset_id = handler.generate_dataset_id(file_path)
+            
+        elif source_type == "json":
+            handler = JSONHandler()
+            df, schema = handler.process_json_file(file_path)
+            dataset_id = handler.generate_dataset_id(file_path)
+            
+        else:
+            raise ValueError(f"Unsupported file type: {source_type}")
         
-    Returns:
-        Configured ChatGoogleGenerativeAI instance
-    """
-    # Get API key from environment
-    api_key = os.getenv("GOOGLE_API_KEY")
-    
-    if not api_key:
-        raise ValueError(
-            "GOOGLE_API_KEY not found in environment variables. "
-            "Please set it in your .env file or environment."
+        state = update_state(
+            state, source_type=source_type, dataset_id=dataset_id,
+            df=df, schema=schema, status="completed"
         )
-    
-    # Create and configure the model
-    model = ChatGoogleGenerativeAI(
-        model=model_name,
-        google_api_key=api_key,
-        temperature=0.1,  # Low temperature for consistent results
-        max_output_tokens=2048,  # Reasonable output limit
-        convert_system_message_to_human=True  # Gemini compatibility
-    )
-    
-    return model
-
-# Test Gemini
-try:
-    print("🧪 Testing Gemini Integration")
-    model = get_gemini_model()
-    print(f"✅ Gemini model loaded: {model.model}")
-    
-    # Test simple response
-    response = model.invoke("Say 'Hello from Gemini!' in exactly 5 words.")
-    print(f"✅ Test response: {response.content}")
-    
-except Exception as e:
-    print(f"❌ Gemini test failed: {str(e)}")
-    print("Make sure you've set your API key correctly!")
-
-# =============================================
-# CELL 8: Create Sample CSV
-# =============================================
-def create_sample_csv():
-    """Create a sample CSV file for testing."""
-    # Sample sales data
-    data = {
-        'order_date': ['2024-01-15', '2024-01-20', '2024-02-01', '2024-02-15', '2024-03-01'],
-        'product': ['Laptop', 'Mouse', 'Keyboard', 'Monitor', 'Headphones'],
-        'category': ['Electronics', 'Accessories', 'Accessories', 'Electronics', 'Accessories'],
-        'quantity': [2, 5, 3, 1, 4],
-        'unit_price': [1200.00, 25.99, 89.99, 299.99, 79.99],
-        'customer_region': ['North', 'South', 'East', 'West', 'North']
-    }
-    
-    df = pd.DataFrame(data)
-    
-    # Save sample CSV
-    csv_path = "sample_sales.csv"
-    df.to_csv(csv_path, index=False)
-    
-    print(f"✅ Created sample CSV file: {csv_path}")
-    print(f"📊 Sample data preview:")
-    print(df.head())
-    print(f"\n📋 Data info:")
-    print(f"   - Rows: {len(df)}")
-    print(f"   - Columns: {len(df.columns)}")
-    
-    return csv_path
-
-# Create sample CSV
-csv_path = create_sample_csv()
-
-# =============================================
-# CELL 9: Test Complete System
-# =============================================
-def test_complete_system():
-    """Test the complete Ingestion Agent system."""
-    print("🚀 Starting Complete System Test")
-    print("=" * 50)
-    
-    # Step 1: Create initial state
-    print("\n1️⃣ Creating initial state...")
-    state = create_initial_state()
-    print(f"   Initial state: {get_status_summary(state)}")
-    
-    # Step 2: Process CSV with Ingestion Agent
-    print("\n2️⃣ Processing CSV with Ingestion Agent...")
-    try:
-        state = process_csv_file(csv_path, state)
-        print(f"   ✅ CSV processed successfully!")
-        print(f"   Status: {get_status_summary(state)}")
         
-        # Show what was added to state
-        print(f"\n📊 State after ingestion:")
-        print(f"   - Source type: {state.get('source_type')}")
-        print(f"   - Dataset ID: {state.get('dataset_id')}")
-        print(f"   - Status: {state.get('status')}")
+        print(f"✅ {source_type.upper()} ingested successfully!")
+        print(f"📊 Dataset ID: {dataset_id}")
+        print(f"📊 Ready for natural language queries!")
         
-        # Show schema
-        if state.get('schema'):
-            schema = state['schema']
-            print(f"\n🔍 Schema:")
-            print(f"   - Total rows: {schema.get('total_rows')}")
-            print(f"   - Total columns: {schema.get('total_columns')}")
-            print(f"   - Columns: {schema.get('columns')}")
-            print(f"   - Data types: {schema.get('data_types')}")
-        
-        # Show DataFrame info
-        if state.get('df') is not None:
-            df = state['df']
-            print(f"\n📊 DataFrame loaded:")
-            print(f"   - Shape: {df.shape}")
-            print(f"   - First few rows:")
-            print(df.head())
+        return state
         
     except Exception as e:
-        print(f"   ❌ Error processing CSV: {str(e)}")
-    
-    # Step 3: Show final state
-    print("\n3️⃣ Final state summary...")
-    print(f"   Final status: {get_status_summary(state)}")
-    
-    if state.get('error'):
-        print(f"   ❌ Errors encountered: {state['error']}")
-    else:
-        print(f"   ✅ Ingestion completed successfully!")
-        print(f"   🎯 Ready for next agent (Planner)")
-    
-    return state
+        state = update_state(state, error=f"{source_type} processing failed: {str(e)}", status="error")
+        return state
 
-# Run the complete test
-final_state = test_complete_system()
+print("✅ Universal Ingestion Agent ready!")
 
 # =============================================
-# CELL 10: Upload Your Own CSV (Optional)
+# CELL 10: Demo - Automatic CSV Ingestion
 # =============================================
-from google.colab import files
+print("🔄 Demo 1: Automatic CSV Ingestion")
+print("=" * 50)
+print("User just uploads a CSV file - no queries needed!")
 
-def test_with_uploaded_csv():
-    """Test the system with a user-uploaded CSV file."""
-    print("📁 Testing with Uploaded CSV")
-    print("=" * 40)
-    
-    # Upload CSV file
-    print("Please upload your CSV file...")
-    uploaded = files.upload()
-    
-    if not uploaded:
-        print("❌ No file uploaded")
-        return
-    
-    # Get the first uploaded file
-    filename = list(uploaded.keys())[0]
-    print(f"✅ File uploaded: {filename}")
-    
-    # Create new state and process
-    state = create_initial_state()
-    print(f"\n🔄 Processing uploaded file...")
-    
-    try:
-        state = process_csv_file(filename, state)
-        print(f"✅ Processing result: {get_status_summary(state)}")
-        
-        if state.get('schema'):
-            schema = state['schema']
-            print(f"\n📊 Your CSV Schema:")
-            print(f"   - Rows: {schema.get('total_rows')}")
-            print(f"   - Columns: {schema.get('total_columns')}")
-            print(f"   - Column names: {schema.get('columns')}")
-        
-        if state.get('df') is not None:
-            df = state['df']
-            print(f"\n📊 Your Data Preview:")
-            print(df.head())
-        
-    except Exception as e:
-        print(f"❌ Error: {str(e)}")
+state1 = create_initial_state()
+print(f"Initial: {get_status_summary(state1)}")
 
-# Uncomment to test with your own CSV
-# test_with_uploaded_csv()
+state1 = ingest_data_file('sample_sales.csv', state1)
+print(f"Result: {get_status_summary(state1)}")
+
+if state1.get('df') is not None:
+    print("\nSample of ingested data:")
+    print(state1['df'].head(3))
 
 # =============================================
-# CELL 11: Summary and Next Steps
+# CELL 11: Demo - Automatic SQLite Ingestion
 # =============================================
-"""
-## 🎯 Summary: What We've Built
+print("\n🔄 Demo 2: Automatic SQLite Ingestion")
+print("=" * 50)
+print("User uploads SQLite file - agent finds ALL tables!")
 
-### ✅ Completed Components
-- **State Management**: Simple dict-based state system
-- **CSV Handler**: Basic CSV processing with pandas
-- **Ingestion Agent**: Complete CSV processing pipeline
-- **Gemini Integration**: AI model setup and configuration
-- **Testing System**: Complete testing with sample and uploaded data
+state2 = create_initial_state()
+print(f"Initial: {get_status_summary(state2)}")
 
-### 🏗️ Architecture
-```
-User Upload CSV → Ingestion Agent → CSV Handler → Basic Schema → DataFrame in State
-                                    ↓
-                              State Updated with:
-                              - dataset_id
-                              - schema (basic)  
-                              - df (DataFrame)
-                              - source_type
-```
+state2 = ingest_data_file('sample_inventory.db', state2)
+print(f"Result: {get_status_summary(state2)}")
 
-### 🎯 Next Steps: Planner Agent
-The next agent will:
-1. Take user questions in English
-2. Use Gemini to convert them to query plans
-3. Generate safe JSON DSL for data operations
-4. Do basic validation before passing to Executor
+if state2.get('schema'):
+    schema = state2['schema']
+    print(f"Tables discovered: {schema.get('tables_discovered', [])}")
 
-### 🎓 What We've Learned
-- **AI Agent Basics**: How agents work together
-- **Data Processing**: Safe pandas operations
-- **State Management**: Simple but effective approach
-- **Gemini Integration**: Easy LLM setup
-- **Minimal Complexity**: Focus on core functionality
+# =============================================
+# CELL 12: Demo - Automatic JSON Ingestion
+# =============================================
+print("\n🔄 Demo 3: Automatic JSON Ingestion")
+print("=" * 50)
+print("User uploads JSON file - agent reads all documents!")
 
-The foundation is solid - ready to build the next agent! 🚀
-"""
+state3 = create_initial_state()
+print(f"Initial: {get_status_summary(state3)}")
 
+state3 = ingest_data_file('sample_customers.json', state3)
+print(f"Result: {get_status_summary(state3)}")
+
+if state3.get('df') is not None:
+    print("\nSample of ingested data:")
+    print(state3['df'].head(2))
+
+# =============================================
+# CELL 13: What We Learned
+# =============================================
+print("\n🎓 What We Learned About CORRECT Ingestion Flow")
+print("=" * 60)
+print("✅ Upload Only: Users just upload files, no technical knowledge needed")
+print("✅ Auto-Discovery: Agent automatically finds all tables/collections")  
+print("✅ Complete Ingestion: Agent reads ALL available data")
+print("✅ No Queries: Users don't write SQL - that comes later!")
+print("✅ Natural Language Ready: Data is prepared for human questions")
+
+print("\n🔍 Correct Workflow:")
+print("1. 📁 User uploads data files (CSV, SQLite, JSON, etc.)")
+print("2. 🤖 Ingestion Agent discovers and reads EVERYTHING")
+print("3. 💬 User asks natural language questions like:")
+print("   - 'What are the top selling products?'")
+print("   - 'Show me revenue by region'")
+print("   - 'Which customers spend the most?'")
+print("4. 🧠 Planner Agent converts questions to execution plans")
+print("5. ⚙️ Executor Agent runs the analysis")
+print("6. 📝 Summarizer Agent explains results in plain English")
+
+print("\n💡 Why This Matters:")
+print("• Users shouldn't need to know SQL or database schemas")
+print("• Automatic discovery makes the system user-friendly")
+print("• Upload-and-forget experience like modern platforms")
+print("• Natural language interface comes after data ingestion")
+
+print("\n🚀 Ready for the Next Agent:")
+print("Now that data is ingested, we can build the Planner Agent")
+print("to convert natural language questions into execution plans!")
+
+# =============================================
+# CELL 14: Try It Yourself
+# =============================================
+print("\n💡 Try It Yourself!")
+print("=" * 30)
+print("1. Upload your own CSV files")
+print("2. Create SQLite databases with multiple tables")
+print("3. Try JSON files with complex document structures")
+print("4. See how the agent handles different file sizes")
+
+print("\n🔧 Understanding Check:")
+print("• Why don't users provide SQL queries during ingestion?")
+print("• How does automatic discovery work?")
+print("• What happens to data from multiple tables?")
+print("• When do natural language queries come into play?")
+print("• How does this prepare data for other agents?")
+
+print("\n🎯 Next Steps:")
+print("• Master the upload-only user experience")
+print("• Understand automatic data discovery")
+print("• See how this prepares for natural language queries")
+print("• Ready to build the Planner Agent!")
